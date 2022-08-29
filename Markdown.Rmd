@@ -1,0 +1,533 @@
+---
+title: "Analisi del prezzo dei prodotti Apple in 26 diversi paesi"
+author: "Martina Moro 147592"
+output:
+  ioslides_presentation:
+    css: style.css
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE, dataimport, include=FALSE}
+library(tidyverse) 
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(DT)
+#gridExtra per più grafici contemporaneamente
+df <- read.csv("apple product price list from 26 countries.csv", sep=";")
+```
+
+## Introduzione
+
+In questo progetto sono andata ad analizzare il prezzo dei prodotti
+Apple 2022 in 26 differenti paesi in tutto il mondo: Australia, Austria,
+Brasile, Canada, Repubblica Ceca, Danimarca, Finlandia, Francia,
+Germania, Ungheria, India, Irlanda, Italia, Lussemburgo, Messico,
+Olanda, Norvegia, Filippine, Polonia, Portogallo, Russia, Spagna,
+Svezia, Tailandia, Turchia e Stati Uniti d'America.
+
+Il dataset presentava il prezzo di 17 differenti prodotti e il gruppo di reddito 
+dei rispettivi paesi. 
+
+I prodotti analizzati sono stati i seguenti: 
+
+*  iPhone 13, iPhone SE, iPhone 12 
+*  Airpods terza generazione, Airpods Pro, Airpods seconda generazione, 
+    Airpods Max
+*  Apple TV 4K, Apple TV HD 
+*  Apple Watch SE, Apple Watch Series 3 
+*  Sport Band 
+*  iPad, iPad Pro
+*  Apple Pencil di seconda generazione 
+*  24-inch iMac², MacBook Air
+*  Magic Mouse
+
+Il dataset aveva due problemi: 
+
+* l'elenco dei prodotti non era coerente tra i paesi
+* il prezzo dei prodotti non era in forma numerica e era secondo la 
+    valuta del paese
+
+Il prezzo di ogni prodotto è stato convertito al dollaro americano con il valore
+della moneta di gennaio 2022. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+##Modifica nome della lista dei prodotti
+#Il nome dei prodotti è stato modificato in modo univoco per tutti i paesi in lingua inglese.
+
+dm <- df %>%
+  mutate(model = case_when(
+    pid == 3 ~ "AirPods(3rd generation)",
+    pid == 5 ~ "AirPods(2nd generation)",
+    pid == 11 ~ "Sport Band",
+    pid == 14 ~ "Apple Pencil (2nd generation)",
+    pid == 15 ~ "24-inch iMac²",
+    pid == 17 ~ "Magic Mouse",
+    TRUE ~ model
+  ))
+```
+
+```{r echo=FALSE}
+## 2 Modifica del prezzo per coerenza in tutti i paesi
+#Sulla base della notazione per raggruppamenti e decimali, i paesi sono divisi in 3 gruppi principali:
+
+d1 <- dm %>%
+  filter(country %in% c("USA", "Australia", "Canada", 
+                          "Mexico", "India", "Philippines", "Thailand"))
+d2 <- dm %>%
+  filter(country %in% c("Czech Republic", "Hungary", "Norway", "Sweden", 
+                        "Russia"))
+
+d3 <- dm %>%
+  filter(country %in% c("Poland", "Portugal", "Netherlands", "Luxembourg", 
+                        "Germany", "Denmark", "Finland", "France", "Italy", 
+                        "Ireland", "Spain", "Turkey", "Austria", "Brazil"))
+
+#Estrazione del prezzo numerico
+d1 <- d1 %>%
+  mutate(price = parse_number(price))
+
+d2 <- d2 %>%
+  mutate(price = parse_number(price, locale = locale(grouping_mark = " ",
+                                                     decimal_mark = ".")))
+
+d3 <- d3 %>%
+  mutate(price = parse_number(price, locale = locale(grouping_mark = ".",
+                                                     decimal_mark = ",")))
+```
+
+```{r echo=FALSE}
+#Data finale
+
+da <- bind_rows(d1, d2, d3) %>%
+  arrange(country)
+```
+
+```{=html}
+<!--
+#Dati sulle tariffe
+Dal dataset "exchange rate.csv" è stato creato un nuovo dataset 
+"usd_rate24country.csv" con il relativo cambio valuta per ogni paese che stiamo
+andando ad analizzare in base al dollaro americano. 
+-->
+```
+```{r echo=FALSE}
+country <- c("Australia", "Austria", "Brazil", "Canada", "Czech Republic", "Denmark", "Finland", 
+              "France", "Germany", "Hungary", "India", "Ireland", "Italy",
+              "Luxembourg", "Mexico", "Netherlands", "Norway", "Philippines",
+              "Poland", "Portugal", "Russia", "Spain", "Sweden", "Thailand", 
+              "Turkey", "USA")
+
+usd_rate <- c(1.38619, 0.88459, 5.66069, 1.27439, 21.94400, 6.58349, 0.88459, 0.88459, 0.88459, 323.58999, 74.50800, 0.88459, 0.88459, 0.88459, 20.54700, 0.88459, 8.86832, 51.29000, 4.05100, 0.88459, 74.90879, 0.88459, 9.08942, 33.29800, 13.40000, 1.0)
+              
+rt <- data.frame(country, usd_rate)
+```
+
+```{r echo=FALSE}
+#Trasforma il prezzo in USD:
+
+da <- da %>%
+  inner_join(rt, by = "country") %>%
+  mutate(price = price/usd_rate) %>%
+  select(-scraped_date)
+```
+
+## Analisi dei prodotti per regioni
+In questo grafico possiamo notare il prezzo dei dispositivi Apple in base a 5 
+regioni di raggruppamento:
+
+* Asia orientale & Pacifico: Australia, Filippine, Polonia, Tailandia
+* Europa & Asia centrale: Austria, Repubblica Ceca, Danimarca, Finlandia, 
+    Francia, Germania, Ungaria, Irlandia, Italia, Lussemburgo, Olanda, Norvegia,
+    Portogallo, Russia, Spagna, Svezia, Turchia
+* America Latina & Caraibi: Brasile, Messico
+* Nord America: Canada, Stati Uniti d'America 
+* Asia del Sud: India
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+dregioni <- da %>%
+  mutate(Region = region) %>%
+  group_by(model, Region) %>%
+  summarise(price = mean(price)) %>%
+  ggplot(aes(model, price, color = Region)) +
+  geom_jitter(size = 2) +
+  labs(title = "Prezzo medio per regione", x = NULL, color = NULL ) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(size = rel(2), hjust=0.5),
+    axis.text = element_text(size = 7),
+    axis.text.x = element_text(angle = 50, hjust = 1),
+    axis.title.y = element_text(size = 8),
+    legend.text = element_text(size = 7),
+    legend.title = element_text(size = 5),
+    legend.position = c(0.25, 0.70),
+    legend.background = element_rect(fill = "transparent")
+  )
+
+dregioni
+```
+
+## Analisi dei prodotti per paese
+
+Ora analizziamo i prodotti che dal grafico precedente hanno mostrato una
+maggiore differenza di prezzo. 
+
+Il primo prodotto analizzato è l'iPhone 12
+
+```{r echo=FALSE}
+library(tidyverse)  
+diphone12 <- da%>%
+              filter(model=="iPhone 12") %>%
+              select(country, price)
+
+mapdata <- map_data("world") #ggplot2
+
+colnames(diphone12)[1] <- "region"
+mapdata <- left_join(mapdata, diphone12, by="region")
+#mapdata1<-mapdata %>% filter(!is.na(mapdata$price))
+map1 <- ggplot(mapdata, aes(x = long, y = lat, group =group)) +
+  geom_polygon(aes(fill = price), color = "black")
+
+map2 <- map1 + scale_fill_gradient(name = "Prezzo Iphone 12", low = "#97FFFF", high = "#2F4F4F", na.value = "white") + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        rect = element_blank())
+map2
+```
+
+```{r echo=FALSE}
+#Iphone 12
+ggplot(data = diphone12, aes (x=country, y=price)) +
+         geom_bar(fill="light blue", color = "#2F4F4F", width = 0.6, stat="identity") +  
+         ggtitle("Prezzo Iphone 12") +
+         theme_bw() +
+         theme(
+          plot.title = element_text(size = rel(2), hjust=0.5),
+          axis.text = element_text(size = 7),
+          axis.text.x = element_text(angle = 50, hjust = 1),
+          axis.title.y = element_text(size = 8),
+        )
+```
+
+Il secondo prodotto analizzato è l'AirPods di terza generazione
+
+```{r echo=FALSE}
+# AirPods(3rd generation)
+dAirPods3<- da%>%
+              filter(model=="AirPods(3rd generation)") %>%
+              select(country, price)
+
+ggplot(data = dAirPods3, aes (x=country, y=price)) +
+         geom_bar(fill="#C1CDC1", color = "#838B83", width = 0.6, stat="identity") +  
+         ggtitle("Prezzo AirPods di terza generazione") +
+         theme_bw() +
+         theme(
+          plot.title = element_text(size = rel(2), hjust=0.5),
+          axis.text = element_text(size = 7),
+          axis.text.x = element_text(angle = 50, hjust = 1),
+          axis.title.y = element_text(size = 8),
+        )
+```
+
+Il terzo prodotto analizzato è l'iPad Pro.
+
+```{r echo=FALSE}
+# iPad Pro
+diPadPro<- da%>%
+              filter(model=="iPad Pro") %>%
+              select(country, price)
+
+ggplot(data = diPadPro, aes (x=country, y=price)) +
+         geom_bar(fill="#EED5B7", color = "#8B7355", width = 0.6, stat="identity") +  
+         ggtitle("Prezzo iPad Pro") +
+         theme_bw() +
+         theme(
+          plot.title = element_text(size = rel(2), hjust=0.5),
+          axis.text = element_text(size = 7),
+          axis.text.x = element_text(angle = 50, hjust = 1),
+          axis.title.y = element_text(size = 8),
+        )
+```
+
+I sucessivi due prodotti analizzati sono rispettivamente il  MacBook Air e il
+iMac 24 pollici.
+
+```{r echo=FALSE}
+# MacBook Air
+
+dMacAir <- da%>%
+              filter(model=="MacBook Air") %>%
+              select(country, price)
+
+ggplot(data = dMacAir, aes (x=country, y=price)) +
+         geom_bar(fill="#CDB79E", color = "#8B4726", width = 0.6, stat="identity") +  
+         ggtitle("Prezzo MacBook Air") +
+         theme_bw() +
+         theme(
+          plot.title = element_text(size = rel(2), hjust=0.5),
+          axis.text = element_text(size = 7),
+          axis.text.x = element_text(angle = 50, hjust = 1),
+          axis.title.y = element_text(size = 8),
+        )
+```
+```{r echo=FALSE}
+#24-inch iMac²
+diMac <- da%>%
+              filter(model=="24-inch iMac²") %>%
+              select(country, price)
+
+ggplot(data = diMac, aes (x=country, y=price)) +
+         geom_bar(fill="#FFB6C1", color = "#8B3A62", width = 0.6, stat="identity") +  
+         ggtitle("Prezzo iMac 24 pollici") +
+         theme_bw() +
+         theme(
+          plot.title = element_text(size = rel(2), hjust=0.5),
+          axis.text = element_text(size = 7),
+          axis.text.x = element_text(angle = 50, hjust = 1),
+          axis.title.y = element_text(size = 8),
+        )
+```
+
+## Il prezzo più basso e più alto per ogni prodotto:
+
+Tabella del prezzo più basso per ogni prodotto 
+
+
+```{r echo=FALSE}
+minprice <- da %>%
+              group_by(model) %>%
+              summarise(price = min(price)) %>%
+              left_join(da, by = c("model", "price")) %>%
+              mutate(min_price = price) %>%
+              select(model, min_price, country)
+
+datatable(minprice)
+```
+
+Gli Stati Uniti e il Canada sono i paesi che hanno il prezzo più basso questo 
+sopratutto perché non hanno costi di spedizione.
+
+
+Tabella del prezzo più alto per ogni prodotto
+
+
+```{r echo=FALSE}
+highprice <-  da %>%
+                group_by(model) %>%
+                summarise(price = max(price)) %>%
+                left_join(da, by = c("model", "price")) %>%
+                mutate(max_price = price) %>%
+                select(model, max_price, country)
+
+datatable(highprice)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+countryIncome <- read.csv("Country_income.csv", sep=";")
+
+#Aggiungere il prezzo giornaliero /30 il prezzo mensile
+median_month = countryIncome[,2]/12
+median_day = median_month/30
+countryIncome = cbind(countryIncome, median_month, median_day) #[,-3] ho rimosso la colonna usd_rate
+```
+
+## Perchè in Brasile i prodotti costano così tanto?
+
+Dalle analisi svolte in precedenza viene spontaneo chiedersi perchè ci sia una 
+differenza così sostanziale di prezzo dei prodotti Apple in Brasile rispetto 
+agli altri paesi. 
+
+In Brasile e in India il governo impone tasse salatissime per i dispositivi che 
+non vengono prodotti nel paese, ed è proprio per ottenere incentivi fiscali 
+mirati che negli ultimi anni Apple ha iniziato ad assemblare gli iPhone in 
+questi paesi. 
+
+I prezzi elevati sono dovuti alle misure protezionistiche che regolamentano le 
+importazioni nel tentativo di proteggere le proprie economie. Anche la qualità 
+delle infrastrutture non aiuta, ed elementi come i costi di consegna e 
+trasporto, probabilmente influenzano altresì i prezzi finali.
+
+Da una ricerca online, si è visto che in realtà il paese con un prezzo maggiore 
+è l'Argentina dove per esempio per un iPhone 12 che in Italia costa (di listino)
+839 €, in Argentina bisogna spendere 2248€. 
+
+I prodotti Apple in Argentina sono mediamente più costosi del 161,89% rispetto 
+ad altre parti del mondo; in Brasile sono mediamente il 60,38% in più costosi.
+
+Gli Stati Uniti sono più economici del 21% rispetto alla media.
+
+L’Italia si trova al 22° posto in classifica nell’elenco dei paesi più costosi 
+dove comprare un prodotto Apple.
+
+In seguito viene riportato un istogramma con la media dei prezzi dei prodotti 
+per ogni paese. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#media prezzo prodotti per ogni paese
+
+Australia_mean_price_product = mean(da[1:17,3])
+Austria_mean_price_product = mean(da[18:35,3])
+Brasil_mean_price_product = mean(da[36:51,3])
+Canada_mean_price_product = mean(da[52:68,3])
+CzechRepublic_mean_price_product = mean(da[69:85,3])
+Denmark_mean_price_product = mean(da[86:102,3])
+Finland_mean_price_product = mean(da[103:119,3])
+France_mean_price_product = mean(da[120:136,3])
+Germany_mean_price_product = mean(da[137:153,3])
+Hungary_mean_price_product = mean(da[154:170,3])
+India_mean_price_product = mean(da[171:188,3])
+Ireland_mean_price_product = mean(da[189:205,3])
+Italy_mean_price_product = mean(da[206:222,3])
+Luxembourg_mean_price_product = mean(da[223:239,3])
+Mexico_mean_price_product = mean(da[240:256,3])
+Netherlands_mean_price_product = mean(da[257:273,3])
+Norway_mean_price_product = mean(da[274:290,3])
+Philippines_mean_price_product = mean(da[291:307,3])
+Poland_mean_price_product = mean(da[308:324,3])
+Portugal_mean_price_product = mean(da[325:341,3])
+Russia_mean_price_product = mean(da[342:357,3])
+Spain_mean_price_product = mean(da[358:374,3])
+Swedan_mean_price_product = mean(da[375:391,3])
+Thailand_mean_price_product = mean(da[392:408,3])
+Turkey_mean_price_product = mean(da[409:425,3])
+UnitedStates_mean_price_product = mean(da[426:442,3])
+
+#Paese, Prezzo medio del prodotto, MedianIncome, median30
+Average_price  = c(Australia_mean_price_product , Austria_mean_price_product, Brasil_mean_price_product, Canada_mean_price_product, CzechRepublic_mean_price_product, Denmark_mean_price_product, Finland_mean_price_product, France_mean_price_product, Germany_mean_price_product, Hungary_mean_price_product, India_mean_price_product, Ireland_mean_price_product, Italy_mean_price_product, Luxembourg_mean_price_product, Mexico_mean_price_product, Netherlands_mean_price_product, Norway_mean_price_product, Philippines_mean_price_product, Poland_mean_price_product, Portugal_mean_price_product, Russia_mean_price_product, Spain_mean_price_product, Swedan_mean_price_product, Thailand_mean_price_product, Turkey_mean_price_product, UnitedStates_mean_price_product)
+
+media = cbind(countryIncome[, 1], Average_price)
+colnames(media) <- c("country", "Prezzo medio (US $)")
+
+media <- as.data.frame(media)
+media$`Prezzo medio (US $)` = as.numeric(media$`Prezzo medio (US $)`)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Grafico prova
+ggplot(media, aes(country, `Prezzo medio (US $)`, fill=media$`Prezzo medio (US $)`)) +
+  #scale_colour_gradient2(low = "red", mid = "white", high = "blue", midpoint = mean(data$`Average work days needed to buy`)) +
+         geom_bar(stat="identity") +
+            ggtitle("Prezzo medio dei prodotti") +
+            scale_fill_gradient(name = "Prezzo") +
+            theme_bw() +
+             theme(
+              plot.title = element_text(size = rel(2), hjust=0.5),
+              axis.text = element_text(size = 7),
+              axis.text.x = element_text(angle = 50, hjust = 1),
+              axis.title.y = element_text(size = 8),
+            )
+```
+
+## Analisi del reddito medio di ogni paese
+L'ultima analisi svolta è stata sul reddito di ogni paese. I dati analizzati 
+sono stati presi dall'OECD, l'organizzazione per la cooperazione e lo sviluppo 
+economico. Essi riguardavano la mediana del reddito annuo dei 26 paesi presi 
+in esame. 
+
+Il reddito mediano è una metrica utilizzata per identificare il punto medio 
+della distribuzione del reddito di una determinata nazione. 
+Poiché la mediana è leggermente diversa da una media, porta ad avere meno 
+valori "anomali" che potrebbero annullare l'accuratezza di una statistica.
+
+Dal grafico seguente si può visualizzare il reddito mensile dei paesi.
+
+```{r echo=FALSE}
+library(tidyverse)  
+dmonthIncome <- countryIncome%>%
+                select(country, median_month)
+
+mapdata <- map_data("world") #ggplot2
+
+colnames(dmonthIncome)[1] <- "region"
+mapdata <- left_join(mapdata, dmonthIncome, by="region")
+#mapdata1<-mapdata %>% filter(!is.na(mapdata$median_month))
+map1 <- ggplot(mapdata, aes(x = long, y = lat, group =group)) +
+  geom_polygon(aes(fill = median_month), color = "black")
+
+map2 <- map1 + scale_fill_gradient(name = "Reddito mensile", low = "#C1FFC1", high = "#698B69", na.value = "white") + 
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        rect = element_blank())
+map2
+```
+Giorni lavorativi medi necessari per l'acquisto di un iPhone 12
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Grafico iPhone 13
+Average_price = diphone12[, 2]
+data = cbind(countryIncome[, 1], Average_price, countryIncome[, 2], countryIncome[,3], countryIncome[,4])
+colnames(data) <- c("country", "Average price (US $)", "MedianIncome", "median_month", "median_day")
+
+data <- as.data.frame(data)
+data$`Average price (US $)` = as.numeric(data$`Average price (US $)`)
+data$MedianIncome = as.numeric(data$MedianIncome)
+data$median_month = as.numeric(data$median_month)
+data$median_day = as.numeric(data$median_day)
+
+calc <- (data$`Average price (US $)` * 100)/data$median_month
+
+data = cbind(data, calc)
+colnames(data)[6] <- "Prezzo medio rettificato (%)"
+
+calc <- (data$`Average price (US $)`/data$median_day)
+
+data = cbind(data, calc)
+colnames(data)[7] <- "Giorni_lavorativi"
+
+#Database income iPhone 13
+dinciPhone12 <- data%>%
+              select(`Giorni_lavorativi`, country)
+
+ggplot(dinciPhone12, aes(Giorni_lavorativi, country, fill=Giorni_lavorativi)) +
+  #scale_colour_gradient2(low = "red", mid = "white", high = "blue", midpoint = mean(data$`Average work days needed to buy`)) +
+         geom_bar(stat="identity") +
+            ggtitle("Giorni lavorativi necessari per l'acquisto iPhone 12") +
+            scale_y_discrete(guide = guide_axis(angle = 0)) 
+```
+
+Giorni lavorativi medi necessari per l'acquisto di un iMac 24 pollici
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Grafico iPhone 12
+Average_price = diMac[, 2]
+data = cbind(countryIncome[, 1], Average_price, countryIncome[, 2], countryIncome[,3], countryIncome[,4])
+colnames(data) <- c("country", "Average price (US $)", "MedianIncome", "median_month", "median_day")
+
+data <- as.data.frame(data)
+data$`Average price (US $)` = as.numeric(data$`Average price (US $)`)
+data$MedianIncome = as.numeric(data$MedianIncome)
+data$median_month = as.numeric(data$median_month)
+data$median_day = as.numeric(data$median_day)
+
+calc <- (data$`Average price (US $)` * 100)/data$median_month
+
+data = cbind(data, calc)
+colnames(data)[6] <- "Prezzo medio rettificato (%)"
+
+calc <- (data$`Average price (US $)`/data$median_day)
+
+data = cbind(data, calc)
+colnames(data)[7] <- "Giorni_lavorativi"
+
+dinciMac <- data%>%
+              select(`Giorni_lavorativi`, country)
+
+ggplot(dinciMac, aes(Giorni_lavorativi, country, fill=Giorni_lavorativi)) +
+  #scale_colour_gradient2(low = "red", mid = "white", high = "blue", midpoint = mean(data$`Average work days needed to buy`)) +
+         geom_bar(stat="identity") +
+            ggtitle("Giorni lavorativi necessari per l'acquisto del iMac 24 pollici") +
+            scale_y_discrete(guide = guide_axis(angle = 0)) 
+```
